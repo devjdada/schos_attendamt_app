@@ -6,7 +6,8 @@ import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.schoolos.attendance.core.hardware.DetectedFace
 import com.schoolos.attendance.core.hardware.FaceDetectionEngine
-import kotlinx.coroutines.tasks.await
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class MlKitFaceDetector : FaceDetectionEngine {
 
@@ -20,26 +21,39 @@ class MlKitFaceDetector : FaceDetectionEngine {
 
     private val detector = FaceDetection.getClient(detectorOptions)
 
-    override suspend fun detectFaces(bitmap: Bitmap): List<DetectedFace> {
-        val image = InputImage.fromBitmap(bitmap, 0)
-        return try {
-            val faces = detector.process(image).await()
-            faces.map { face ->
-                DetectedFace(
-                    bounds = face.boundingBox,
-                    yawAngle = face.headEulerAngleY,
-                    pitchAngle = face.headEulerAngleX,
-                    rollAngle = face.headEulerAngleZ,
-                    leftEyeOpenProb = face.leftEyeOpenProbability,
-                    rightEyeOpenProb = face.rightEyeOpenProbability,
-                    smilingProb = face.smilingProbability,
-                    trackingId = face.trackingId
-                )
+    override suspend fun detectFaces(bitmap: Bitmap): List<DetectedFace> =
+        suspendCancellableCoroutine { continuation ->
+            try {
+                val image = InputImage.fromBitmap(bitmap, 0)
+                detector.process(image)
+                    .addOnSuccessListener { faces ->
+                        val results = faces.map { face ->
+                            DetectedFace(
+                                bounds = face.boundingBox,
+                                yawAngle = face.headEulerAngleY,
+                                pitchAngle = face.headEulerAngleX,
+                                rollAngle = face.headEulerAngleZ,
+                                leftEyeOpenProb = face.leftEyeOpenProbability,
+                                rightEyeOpenProb = face.rightEyeOpenProbability,
+                                smilingProb = face.smilingProbability,
+                                trackingId = face.trackingId
+                            )
+                        }
+                        if (continuation.isActive) {
+                            continuation.resume(results)
+                        }
+                    }
+                    .addOnFailureListener {
+                        if (continuation.isActive) {
+                            continuation.resume(emptyList())
+                        }
+                    }
+            } catch (e: Exception) {
+                if (continuation.isActive) {
+                    continuation.resume(emptyList())
+                }
             }
-        } catch (e: Exception) {
-            emptyList()
         }
-    }
 
     override fun release() {
         try {
