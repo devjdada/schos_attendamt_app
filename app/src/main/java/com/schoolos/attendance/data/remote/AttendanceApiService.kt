@@ -65,7 +65,7 @@ data class EnrolledPersonDto(
     val is_active: Boolean
 )
 
-class AttendanceApiService(private val baseUrl: String = "http://schos.test/api/v1") {
+class AttendanceApiService(private val baseUrl: String = "https://schos.wchapel.com/api/v1") {
 
     private val gson = Gson()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
